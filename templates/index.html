@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>License Plate Detection API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 30px;
+        }
+        .plate-result {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .plate-text {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            margin: 10px 0;
+        }
+        .confidence {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .images {
+            display: flex;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .image-container {
+            text-align: center;
+        }
+        .image-container img {
+            max-width: 200px;
+            max-height: 150px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .image-label {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 License Plate Detection API</h1>
+        <p>Upload an image to detect license plates and extract text using OCR</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>📸 Drop an image here or click to select</p>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        </div>
+        
+        <button class="btn" id="uploadBtn" disabled>🔍 Detect License Plates</button>
+        <button class="btn" id="clearBtn">🗑️ Clear Results</button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing image...</p>
+        </div>
+        
+        <div id="results" class="results"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        
+        let selectedFile = null;
+
+        // Upload area click handler
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // File input change handler
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                uploadArea.innerHTML = `<p>📁 Selected: ${file.name}</p>`;
+                uploadBtn.disabled = false;
+            }
+        });
+
+        // Drag and drop handlers
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                selectedFile = file;
+                uploadArea.innerHTML = `<p>📁 Selected: ${file.name}</p>`;
+                uploadBtn.disabled = false;
+            }
+        });
+
+        // Upload button handler
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            loading.style.display = 'block';
+            results.innerHTML = '';
+            uploadBtn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/detect', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    showError('Detection failed: ' + data.message);
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+            } finally {
+                loading.style.display = 'none';
+                uploadBtn.disabled = false;
+            }
+        });
+
+        // Clear button handler
+        clearBtn.addEventListener('click', () => {
+            selectedFile = null;
+            uploadArea.innerHTML = '<p>📸 Drop an image here or click to select</p>';
+            uploadBtn.disabled = true;
+            results.innerHTML = '';
+            fileInput.value = '';
+        });
+
+        function displayResults(data) {
+            results.innerHTML = `
+                <div class="success">
+                    ✅ ${data.message}
+                </div>
+                
+                <h3>📊 Detection Results</h3>
+                <p><strong>Total License Plates Found:</strong> ${data.total_plates_detected}</p>
+                <p><strong>Request ID:</strong> ${data.unique_id}</p>
+                
+                <div class="images">
+                    <div class="image-container">
+                        <img src="${data.detected_image_url}" alt="Detected Image">
+                        <div class="image-label">Full Image with Detections</div>
+                    </div>
+                </div>
+                
+                ${data.license_plates.map(plate => `
+                    <div class="plate-result">
+                        <h4>🚙 License Plate ${plate.plate_number}</h4>
+                        <div class="plate-text">📝 ${plate.extracted_text || 'No text detected'}</div>
+                        <p><strong>Raw OCR Output:</strong> "${plate.raw_ocr_output}"</p>
+                        <p><strong>Confidence:</strong> <span class="confidence">${(plate.confidence * 100).toFixed(1)}%</span></p>
+                        
+                        <div class="images">
+                            <div class="image-container">
+                                <img src="${plate.cropped_image_url}" alt="Cropped License Plate">
+                                <div class="image-label">Cropped Plate</div>
+                            </div>
+                            <div class="image-container">
+                                <img src="${plate.preprocessed_image_url}" alt="Preprocessed Image">
+                                <div class="image-label">Preprocessed for OCR</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function showError(message) {
+            results.innerHTML = `<div class="error">❌ ${message}</div>`;
+        }
+    </script>
+</body>
+</html>

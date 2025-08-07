@@ -3,5 +3,6 @@ fastapi
 uvicorn
 pydantic
 opencv-python
-pytesseract
+easyocr
 pillow
+python-multipart
